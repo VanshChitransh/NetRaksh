@@ -1,11 +1,13 @@
 import express  from "express";
-import { authMiddleWare } from "./middleware";
+import { authMiddleWare } from "./authMiddleWare";
 import { PrismaClient } from "../../packages/db/generated/prisma";
 import { prismaClient } from "db/client";
 import { webcrypto } from "crypto";
+import cors from 'cors'
 
 const app = express();
 app.use(express.json())
+app.use(cors())
 
 app.post('/api/v1/website', authMiddleWare, async(req,res) => {
     const userId = req.userId!
@@ -14,7 +16,8 @@ app.post('/api/v1/website', authMiddleWare, async(req,res) => {
     const data = await prismaClient.websites.create({
         data:{
             url,
-            userId
+            userId,
+            // disabled: false
         }
     })
     res.json({
@@ -68,6 +71,6 @@ app.delete('/api/v1/websites', authMiddleWare, async(req,res) => {
     }
 })
 
-app.listen(3000, () => {
+app.listen(4000, () => {
     console.log("Server is up and running on 3000")
 })

@@ -1,418 +1,800 @@
-import React from 'react';
+"use client"
+import React, { useState, useEffect } from 'react';
 import { 
-  Monitor, 
-  Shield, 
-  Bell, 
-  BarChart3, 
+  Activity, 
+  Plus, 
+  Settings, 
+  Bell,
+  RefreshCw,
+  ChevronDown, 
+  ChevronRight, 
   Globe, 
-  Zap, 
   Clock, 
-  CheckCircle2, 
-  ArrowRight,
-  Menu,
-  X,
-  Star,
-  Users,
-  Activity,
-  Smartphone
+  Zap,
+  Trash2,
+  ExternalLink,
+  X
 } from 'lucide-react';
-import { useState } from 'react';
 
-function App() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+// Types
+interface UptimeWindow {
+  timestamp: string;
+  status: 'up' | 'down';
+  responseTime: number;
+}
 
-  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
+interface Tick {
+  id: string;
+  createdAt: string;
+  status: boolean;
+  latency: number;
+}
+
+interface Website {
+  id: string;
+  url: string;
+  ticks: Tick[];
+}
+
+interface TransformedWebsite {
+  id: string;
+  name: string;
+  url: string;
+  status: 'up' | 'down' | 'degraded';
+  uptime: number;
+  responseTime: number;
+  lastChecked: string;
+  uptimeHistory: UptimeWindow[];
+}
+
+// Custom Hook for Website Management
+const useWebsites = () => {
+  const [websites, setWebsites] = useState<Website[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Generate mock data for demonstration
+  const mockWebsites: Website[] = [];
+
+  function generateMockTicks(isUp: boolean, avgLatency: number): Tick[] {
+    const ticks: Tick[] = [];
+    const now = new Date();
+    
+    // Generate ticks for the last 30 minutes (every 30 seconds)
+    for (let i = 60; i >= 0; i--) {
+      const tickTime = new Date(now.getTime() - i * 30 * 1000);
+      const randomVariation = (Math.random() - 0.5) * 100;
+      const latency = isUp ? Math.max(50, avgLatency + randomVariation) : 0;
+      
+      // Simulate occasional downtime
+      const status = isUp ? (Math.random() > 0.05) : false;
+      
+      ticks.push({
+        id: `tick-${i}`,
+        createdAt: tickTime.toISOString(),
+        status,
+        latency: Math.round(latency)
+      });
+    }
+    
+    return ticks;
+  }
+
+  useEffect(() => {
+    // Simulate loading
+    setTimeout(() => {
+      setWebsites([]);
+      setLoading(false);
+    }, 1000);
+  }, []);
+
+  const refreshWebsites = async () => {
+    setLoading(true);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Update with fresh mock data
+    const updatedWebsites = websites.map(site => ({
+      ...site,
+      ticks: generateMockTicks(
+        site.ticks.length > 0 ? site.ticks[site.ticks.length - 1].status : true,
+        site.ticks.length > 0 ? site.ticks[site.ticks.length - 1].latency : 200
+      )
+    }));
+    
+    setWebsites(updatedWebsites);
+    setLoading(false);
+  };
+
+  const addWebsite = async (url: string): Promise<boolean> => {
+    try {
+      const newWebsite: Website = {
+        id: Date.now().toString(),
+        url,
+        ticks: generateMockTicks(true, 200 + Math.random() * 300)
+      };
+      
+      setWebsites(prev => [...prev, newWebsite]);
+      return true;
+    } catch (error) {
+      console.error('Failed to add website:', error);
+      return false;
+    }
+  };
+
+  const removeWebsite = async (id: string): Promise<boolean> => {
+    try {
+      setWebsites(prev => prev.filter(site => site.id !== id));
+      return true;
+    } catch (error) {
+      console.error('Failed to remove website:', error);
+      return false;
+    }
+  };
+
+  return {
+    websites,
+    loading,
+    refreshWebsites,
+    addWebsite,
+    removeWebsite
+  };
+};
+
+// Utility Functions
+const extractDomainName = (url: string): string => {
+  try {
+    const domain = new URL(url).hostname;
+    return domain.replace('www.', '');
+  } catch {
+    return url;
+  }
+};
+
+const getRelativeTime = (date: Date): string => {
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (diffInSeconds < 60) {
+    return `${diffInSeconds} seconds ago`;
+  } else if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+  } else if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  } else {
+    const days = Math.floor(diffInSeconds / 86400);
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  }
+};
+
+const aggregateTicksToThreeMinuteWindows = (ticks: Tick[]): UptimeWindow[] => {
+  if (!ticks || ticks.length === 0) {
+    // Return empty windows for the last 30 minutes if no ticks
+    const now = new Date();
+    const windows: UptimeWindow[] = [];
+    
+    for (let i = 9; i >= 0; i--) {
+      const windowEnd = new Date(now.getTime() - i * 3 * 60 * 1000);
+      windows.push({
+        timestamp: windowEnd.toISOString(),
+        status: 'down' as const,
+        responseTime: 0
+      });
+    }
+    
+    return windows;
+  }
+
+  const sortedTicks = [...ticks].sort((a, b) => 
+    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+
+  const now = new Date();
+  const windows: UptimeWindow[] = [];
+  
+  for (let i = 9; i >= 0; i--) {
+    const windowStart = new Date(now.getTime() - (i + 1) * 3 * 60 * 1000);
+    const windowEnd = new Date(now.getTime() - i * 3 * 60 * 1000);
+    
+    const windowTicks = sortedTicks.filter(tick => {
+      const tickTime = new Date(tick.createdAt);
+      return tickTime >= windowStart && tickTime < windowEnd;
+    });
+    
+    let status: 'up' | 'down' = 'down';
+    let avgResponseTime = 0;
+    
+    if (windowTicks.length > 0) {
+      const hasDownTick = windowTicks.some(tick => !tick.status);
+      status = hasDownTick ? 'down' : 'up';
+      
+      const successfulTicks = windowTicks.filter(tick => tick.status);
+      if (successfulTicks.length > 0) {
+        avgResponseTime = Math.round(
+          successfulTicks.reduce((sum, tick) => sum + tick.latency, 0) / successfulTicks.length
+        );
+      }
+    }
+    
+    windows.push({
+      timestamp: windowEnd.toISOString(),
+      status,
+      responseTime: avgResponseTime
+    });
+  }
+  
+  return windows;
+};
+
+const transformWebsiteData = (websites: Website[] = []): TransformedWebsite[] => {
+  return websites.map(site => {
+    const uptimeHistory = aggregateTicksToThreeMinuteWindows(site.ticks);
+    
+    // Calculate uptime for last 24 hours
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentTicks = site.ticks?.filter(tick => 
+      new Date(tick.createdAt) >= oneDayAgo
+    ) || [];
+    
+    const uptime = recentTicks.length > 0 
+      ? Math.round((recentTicks.filter(tick => tick.status).length / recentTicks.length) * 100 * 10) / 10
+      : 0;
+    
+    // Get latest tick for current status
+    const latestTick = site.ticks && site.ticks.length > 0 
+      ? site.ticks.reduce((latest, current) => 
+          new Date(current.createdAt) > new Date(latest.createdAt) ? current : latest
+        )
+      : null;
+    
+    let status: 'up' | 'down' | 'degraded' = 'down';
+    let responseTime = 0;
+    
+    if (latestTick) {
+      if (latestTick.status) {
+        status = latestTick.latency > 1000 ? 'degraded' : 'up';
+        responseTime = latestTick.latency;
+      } else {
+        status = 'down';
+      }
+    }
+    
+    const lastChecked = latestTick 
+      ? getRelativeTime(new Date(latestTick.createdAt))
+      : 'Never';
+    
+    const name = extractDomainName(site.url);
+    
+    return {
+      id: site.id,
+      name,
+      url: site.url,
+      status,
+      uptime,
+      responseTime,
+      lastChecked,
+      uptimeHistory
+    };
+  });
+};
+
+// Components
+interface StatusIndicatorProps {
+  status: 'up' | 'down' | 'degraded';
+  size?: 'sm' | 'md' | 'lg';
+}
+
+const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status, size = 'md' }) => {
+  const sizeClasses = {
+    sm: 'w-2 h-2',
+    md: 'w-3 h-3', 
+    lg: 'w-4 h-4'
+  };
+
+  const statusClasses = {
+    up: 'bg-green-500 shadow-green-200',
+    down: 'bg-red-500 shadow-red-200',
+    degraded: 'bg-yellow-500 shadow-yellow-200'
+  };
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 bg-black/80 backdrop-blur-lg border-b border-gray-800 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2">
-              <Monitor className="h-8 w-8 text-emerald-400" />
-              <span className="text-xl font-bold">UpGuard</span>
-            </div>
-            
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center space-x-8">
-              <a href="#features" className="text-gray-300 hover:text-white transition-colors">Features</a>
-              <a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a>
-              <a href="#about" className="text-gray-300 hover:text-white transition-colors">About</a>
-              <button className="bg-emerald-600 hover:bg-emerald-700 px-6 py-2 rounded-lg font-medium transition-colors">
-                Start Free Trial
-              </button>
-            </div>
+    <div 
+      className={`${sizeClasses[size]} ${statusClasses[status]} rounded-full shadow-lg`} 
+    />
+  );
+};
 
-            {/* Mobile menu button */}
-            <button onClick={toggleMenu} className="md:hidden">
-              {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
-          </div>
+interface UptimeChartProps {
+  data: UptimeWindow[];
+}
 
-          {/* Mobile Navigation */}
-          {isMenuOpen && (
-            <div className="md:hidden border-t border-gray-800 pt-4 pb-6">
-              <div className="flex flex-col space-y-4">
-                <a href="#features" className="text-gray-300 hover:text-white transition-colors">Features</a>
-                <a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a>
-                <a href="#about" className="text-gray-300 hover:text-white transition-colors">About</a>
-                <button className="bg-emerald-600 hover:bg-emerald-700 px-6 py-2 rounded-lg font-medium transition-colors w-full">
-                  Start Free Trial
+const UptimeChart: React.FC<UptimeChartProps> = ({ data }) => {
+  return (
+    <div className="flex items-end space-x-1 h-16 bg-gray-50 p-2 rounded-lg">
+      {data.map((point, index) => (
+        <div
+          key={index}
+          className={`flex-1 rounded-sm transition-all duration-500 hover:opacity-80 cursor-pointer ${
+            point.status === 'up' 
+              ? 'bg-gradient-to-t from-green-400 to-green-500 hover:from-green-500 hover:to-green-600' 
+              : 'bg-gradient-to-t from-red-400 to-red-500 hover:from-red-500 hover:to-red-600'
+          }`}
+          style={{ 
+            height: point.status === 'up' 
+              ? `${Math.max(80, Math.min(100, (point.responseTime / 10) + 60))}%`
+              : '20%' 
+          }}
+          title={`${new Date(point.timestamp).toLocaleTimeString()} - ${point.status.toUpperCase()} ${
+            point.responseTime > 0 ? `(${point.responseTime}ms)` : ''
+          }`}
+        />
+      ))}
+    </div>
+  );
+};
+
+interface WebsiteCardProps {
+  website: TransformedWebsite;
+  onRemove?: (id: string) => void;
+}
+
+const WebsiteCard: React.FC<WebsiteCardProps> = ({ website, onRemove }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'up': return 'Operational';
+      case 'down': return 'Down';
+      case 'degraded': return 'Degraded';
+      default: return 'Unknown';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'up': return 'text-green-600';
+      case 'down': return 'text-red-600';
+      case 'degraded': return 'text-yellow-600';
+      default: return 'text-gray-600';
+    }
+  };
+
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onRemove) {
+      onRemove(website.id);
+    }
+  };
+
+  const handleVisitSite = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.open(website.url, '_blank');
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-gray-300">
+      <div
+        className="p-6 cursor-pointer"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <StatusIndicator status={website.status} size="lg" />
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
+                <span>{website.name}</span>
+                <button
+                  onClick={handleVisitSite}
+                  className="text-gray-400 hover:text-blue-600 transition-colors"
+                  title="Visit website"
+                >
+                  <ExternalLink size={16} />
                 </button>
+              </h3>
+              <div className="flex items-center space-x-2 text-sm text-gray-500">
+                <Globe size={14} />
+                <span>{website.url}</span>
               </div>
-            </div>
-          )}
-        </div>
-      </nav>
-
-      {/* Hero Section */}
-      <section className="pt-24 pb-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center">
-            <div className="inline-flex items-center bg-gray-900/50 border border-gray-700 rounded-full px-4 py-2 mb-8">
-              <Zap className="h-4 w-4 text-emerald-400 mr-2" />
-              <span className="text-sm text-gray-300">99.9% uptime guarantee</span>
-            </div>
-            
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">
-              Never Miss<br />
-              <span className="bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent">
-                Downtime Again
-              </span>
-            </h1>
-            
-            <p className="text-xl md:text-2xl text-gray-400 mb-12 max-w-3xl mx-auto leading-relaxed">
-              Monitor your websites, APIs, and services 24/7. Get instant alerts when something goes wrong 
-              and detailed insights to keep your business running smoothly.
-            </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <button className="bg-emerald-600 hover:bg-emerald-700 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 hover:scale-105 flex items-center group">
-                Start Free Trial
-                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </button>
-              <button className="border border-gray-600 hover:border-gray-500 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-gray-900/50">
-                View Demo
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gray-900/30">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-emerald-400 mb-2">99.9%</div>
-              <div className="text-gray-400">Uptime SLA</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-blue-400 mb-2">30s</div>
-              <div className="text-gray-400">Check Interval</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-purple-400 mb-2">10K+</div>
-              <div className="text-gray-400">Happy Customers</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-orange-400 mb-2">24/7</div>
-              <div className="text-gray-400">Support</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">
-              Everything You Need to
-              <span className="bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent"> Stay Online</span>
-            </h2>
-            <p className="text-xl text-gray-400 max-w-3xl mx-auto">
-              Comprehensive monitoring tools that give you complete visibility into your infrastructure
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-emerald-400/50 transition-all duration-300 hover:transform hover:scale-105">
-              <div className="bg-emerald-600/20 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
-                <Globe className="h-6 w-6 text-emerald-400" />
-              </div>
-              <h3 className="text-xl font-semibold mb-3">Website Monitoring</h3>
-              <p className="text-gray-400">Monitor your websites from multiple global locations with customizable check intervals.</p>
-            </div>
-
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-blue-400/50 transition-all duration-300 hover:transform hover:scale-105">
-              <div className="bg-blue-600/20 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
-                <Activity className="h-6 w-6 text-blue-400" />
-              </div>
-              <h3 className="text-xl font-semibold mb-3">API Monitoring</h3>
-              <p className="text-gray-400">Test your APIs with custom headers, authentication, and response validation.</p>
-            </div>
-
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-purple-400/50 transition-all duration-300 hover:transform hover:scale-105">
-              <div className="bg-purple-600/20 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
-                <Bell className="h-6 w-6 text-purple-400" />
-              </div>
-              <h3 className="text-xl font-semibold mb-3">Smart Alerts</h3>
-              <p className="text-gray-400">Get notified instantly via email, SMS, Slack, or webhook when issues arise.</p>
-            </div>
-
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-orange-400/50 transition-all duration-300 hover:transform hover:scale-105">
-              <div className="bg-orange-600/20 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
-                <BarChart3 className="h-6 w-6 text-orange-400" />
-              </div>
-              <h3 className="text-xl font-semibold mb-3">Detailed Analytics</h3>
-              <p className="text-gray-400">Comprehensive reports with uptime statistics, response times, and performance trends.</p>
-            </div>
-
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-red-400/50 transition-all duration-300 hover:transform hover:scale-105">
-              <div className="bg-red-600/20 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
-                <Shield className="h-6 w-6 text-red-400" />
-              </div>
-              <h3 className="text-xl font-semibold mb-3">SSL Monitoring</h3>
-              <p className="text-gray-400">Track SSL certificate expiration dates and get alerts before they expire.</p>
-            </div>
-
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-yellow-400/50 transition-all duration-300 hover:transform hover:scale-105">
-              <div className="bg-yellow-600/20 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
-                <Smartphone className="h-6 w-6 text-yellow-400" />
-              </div>
-              <h3 className="text-xl font-semibold mb-3">Mobile App</h3>
-              <p className="text-gray-400">Monitor your services on the go with our native mobile applications.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-900/30">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">How It Works</h2>
-            <p className="text-xl text-gray-400 max-w-3xl mx-auto">
-              Get started in minutes with our simple three-step process
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="bg-emerald-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold">
-                1
-              </div>
-              <h3 className="text-xl font-semibold mb-4">Add Your Services</h3>
-              <p className="text-gray-400">Simply enter your website URLs, API endpoints, or service details to start monitoring.</p>
-            </div>
-
-            <div className="text-center">
-              <div className="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold">
-                2
-              </div>
-              <h3 className="text-xl font-semibold mb-4">Configure Alerts</h3>
-              <p className="text-gray-400">Set up notification channels and customize alert conditions to match your needs.</p>
-            </div>
-
-            <div className="text-center">
-              <div className="bg-purple-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold">
-                3
-              </div>
-              <h3 className="text-xl font-semibold mb-4">Stay Informed</h3>
-              <p className="text-gray-400">Receive instant notifications and access detailed reports whenever you need them.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Section */}
-      <section id="pricing" className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">
-              Simple, Transparent 
-              <span className="bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent"> Pricing</span>
-            </h2>
-            <p className="text-xl text-gray-400 max-w-3xl mx-auto">
-              Choose the plan that fits your monitoring needs. All plans include our core features.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {/* Starter Plan */}
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8">
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold mb-2">Starter</h3>
-                <div className="text-4xl font-bold mb-2">$9<span className="text-lg text-gray-400">/month</span></div>
-                <p className="text-gray-400">Perfect for small websites</p>
-              </div>
-              <ul className="space-y-4 mb-8">
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>Up to 5 monitors</span>
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>1-minute check intervals</span>
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>Email alerts</span>
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>Basic reporting</span>
-                </li>
-              </ul>
-              <button className="w-full border border-gray-600 hover:border-emerald-400 py-3 rounded-lg font-semibold transition-colors">
-                Start Free Trial
-              </button>
-            </div>
-
-            {/* Professional Plan */}
-            <div className="bg-gray-900/50 border-2 border-emerald-400 rounded-xl p-8 relative">
-              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                <span className="bg-emerald-400 text-black px-4 py-1 rounded-full text-sm font-semibold">
-                  Most Popular
-                </span>
-              </div>
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold mb-2">Professional</h3>
-                <div className="text-4xl font-bold mb-2">$29<span className="text-lg text-gray-400">/month</span></div>
-                <p className="text-gray-400">For growing businesses</p>
-              </div>
-              <ul className="space-y-4 mb-8">
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>Up to 50 monitors</span>
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>30-second check intervals</span>
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>Multi-channel alerts</span>
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>Advanced reporting</span>
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>API access</span>
-                </li>
-              </ul>
-              <button className="w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-lg font-semibold transition-colors">
-                Start Free Trial
-              </button>
-            </div>
-
-            {/* Enterprise Plan */}
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8">
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold mb-2">Enterprise</h3>
-                <div className="text-4xl font-bold mb-2">$99<span className="text-lg text-gray-400">/month</span></div>
-                <p className="text-gray-400">For large organizations</p>
-              </div>
-              <ul className="space-y-4 mb-8">
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>Unlimited monitors</span>
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>10-second check intervals</span>
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>Priority support</span>
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>Custom integrations</span>
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400 mr-3" />
-                  <span>White-label option</span>
-                </li>
-              </ul>
-              <button className="w-full border border-gray-600 hover:border-blue-400 py-3 rounded-lg font-semibold transition-colors">
-                Contact Sales
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-emerald-600/20 to-blue-600/20">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl md:text-5xl font-bold mb-6">
-            Ready to Never Miss Downtime Again?
-          </h2>
-          <p className="text-xl text-gray-300 mb-8">
-            Join thousands of businesses that trust UpGuard to keep their services running smoothly.
-          </p>
-          <button className="bg-emerald-600 hover:bg-emerald-700 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 hover:scale-105">
-            Start Your Free 14-Day Trial
-          </button>
-          <p className="text-sm text-gray-400 mt-4">No credit card required • Cancel anytime</p>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-gray-800 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center space-x-2 mb-6">
-                <Monitor className="h-8 w-8 text-emerald-400" />
-                <span className="text-xl font-bold">UpGuard</span>
-              </div>
-              <p className="text-gray-400">
-                Reliable uptime monitoring for modern businesses. Stay online, stay profitable.
-              </p>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-4">Product</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Website Monitoring</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">API Monitoring</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">SSL Monitoring</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Status Pages</a></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-4">Company</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">About</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Careers</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-4">Support</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Documentation</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Help Center</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Status</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
-              </ul>
             </div>
           </div>
           
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2025 UpGuard. All rights reserved.</p>
+          <div className="flex items-center space-x-6">
+            <div className="text-right">
+              <div className={`text-sm font-medium ${getStatusColor(website.status)}`}>
+                {getStatusText(website.status)}
+              </div>
+              <div className="text-xs text-gray-500">
+                Last checked {website.lastChecked}
+              </div>
+            </div>
+            
+            <div className="text-right">
+              <div className="text-lg font-bold text-gray-900">{website.uptime}%</div>
+              <div className="text-xs text-gray-500">Uptime</div>
+            </div>
+            
+            <div className="text-right">
+              <div className="text-lg font-bold text-gray-900">
+                {website.responseTime > 0 ? `${website.responseTime}ms` : '-'}
+              </div>
+              <div className="text-xs text-gray-500">Response</div>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleRemove}
+                className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                title="Remove website"
+              >
+                <Trash2 size={16} />
+              </button>
+              <div className="flex items-center">
+                {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+              </div>
+            </div>
           </div>
         </div>
-      </footer>
+      </div>
+      
+      {isExpanded && (
+        <div className="border-t border-gray-100 p-6 bg-gradient-to-br from-gray-50 to-white animate-in slide-in-from-top duration-300">
+          <div className="space-y-6">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-medium text-gray-700 flex items-center">
+                  <Clock size={16} className="mr-2" />
+                  Uptime History (Last 30 minutes)
+                </h4>
+                <div className="flex items-center space-x-4 text-xs text-gray-500">
+                  <div className="flex items-center space-x-1">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span>Operational</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    <span>Downtime</span>
+                  </div>
+                </div>
+              </div>
+              <UptimeChart data={website.uptimeHistory} />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-3xl font-bold text-green-600">{website.uptime}%</div>
+                    <div className="text-sm text-gray-500">24-hour uptime</div>
+                  </div>
+                  <Zap className="text-green-500" size={28} />
+                </div>
+              </div>
+              
+              <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-3xl font-bold text-blue-600">
+                      {website.responseTime > 0 ? `${website.responseTime}ms` : '-'}
+                    </div>
+                    <div className="text-sm text-gray-500">Last response time</div>
+                  </div>
+                  <Clock className="text-blue-500" size={28} />
+                </div>
+              </div>
+              
+              <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className={`text-3xl font-bold ${getStatusColor(website.status)}`}>
+                      {getStatusText(website.status)}
+                    </div>
+                    <div className="text-sm text-gray-500">Current status</div>
+                  </div>
+                  <StatusIndicator status={website.status} size="lg" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface AddWebsiteFormProps {
+  onAdd: (url: string) => Promise<boolean>;
+  onCancel: () => void;
+}
+
+const AddWebsiteForm: React.FC<AddWebsiteFormProps> = ({ onAdd, onCancel }) => {
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const validateUrl = (url: string): boolean => {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!websiteUrl.trim()) {
+      setError('Please enter a website URL');
+      return;
+    }
+
+    if (!validateUrl(websiteUrl)) {
+      setError('Please enter a valid URL (including http:// or https://)');
+      return;
+    }
+
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      const success = await onAdd(websiteUrl);
+      if (success) {
+        setWebsiteUrl('');
+        onCancel();
+      } else {
+        setError('Failed to add website. Please try again.');
+      }
+    } catch (error) {
+      setError('An error occurred while adding the website.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="mb-8">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="websiteUrl" className="block text-sm font-medium text-gray-700 mb-2">
+              Website URL
+            </label>
+            <div className="flex space-x-3">
+              <div className="flex-1">
+                <input
+                  type="url"
+                  id="websiteUrl"
+                  value={websiteUrl}
+                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors caret-black text-black"
+                  required
+                  disabled={isSubmitting}
+                />
+                {error && (
+                  <p className="mt-1 text-sm text-red-600">{error}</p>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={isSubmitting || !websiteUrl.trim()}
+                className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                <Plus size={16} />
+                <span>{isSubmitting ? 'Adding...' : 'Add Website'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={onCancel}
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Main App Component
+function App() {
+  const { websites, loading, refreshWebsites, addWebsite, removeWebsite } = useWebsites();
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  const transformedWebsites = transformWebsiteData(websites);
+  
+  const totalSites = transformedWebsites.length;
+  const upSites = transformedWebsites.filter(site => site.status === 'up').length;
+  const downSites = transformedWebsites.filter(site => site.status === 'down').length;
+  const degradedSites = transformedWebsites.filter(site => site.status === 'degraded').length;
+
+  const handleAddWebsite = () => {
+    setShowAddForm(true);
+  };
+
+  const handleAddSubmit = async (url: string): Promise<boolean> => {
+    const success = await addWebsite(url);
+    return success;
+  };
+
+  const handleRemoveWebsite = async (id: string) => {
+    if (window.confirm('Are you sure you want to remove this website from monitoring?')) {
+      await removeWebsite(id);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refreshWebsites();
+    setTimeout(() => setRefreshing(false), 500);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your websites...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-blue-600 rounded-lg">
+                <Activity className="text-white" size={24} />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">UpTime Monitor</h1>
+                <p className="text-sm text-gray-500">Real-time website monitoring</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <button 
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                title="Refresh data"
+              >
+                <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
+              </button>
+              <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                <Bell size={20} />
+              </button>
+              <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                <Settings size={20} />
+              </button>
+              <button 
+                onClick={handleAddWebsite}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md"
+              >
+                <Plus size={16} className="mr-2" />
+                Add Website
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-gray-900">{totalSites}</div>
+                <div className="text-sm text-gray-500">Total Websites</div>
+              </div>
+              <div className="p-3 bg-gray-100 rounded-lg">
+                <Activity className="text-gray-600" size={24} />
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-green-600">{upSites}</div>
+                <div className="text-sm text-gray-500">Operational</div>
+              </div>
+              <div className="w-6 h-6 bg-green-500 rounded-full shadow-green-200 shadow-lg"></div>
+            </div>
+          </div>
+          
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-red-600">{downSites}</div>
+                <div className="text-sm text-gray-500">Down</div>
+              </div>
+              <div className="w-6 h-6 bg-red-500 rounded-full  shadow-red-200 shadow-lg"></div>
+            </div>
+          </div>
+          
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-yellow-600">{degradedSites}</div>
+                <div className="text-sm text-gray-500">Degraded</div>
+              </div>
+              <div className="w-6 h-6 bg-yellow-500 rounded-full shadow-yellow-200 shadow-lg"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Add Website Form */}
+        {showAddForm && (
+          <AddWebsiteForm
+            onAdd={handleAddSubmit}
+            onCancel={() => setShowAddForm(false)}
+          />
+        )}
+
+        {/* Websites List */}
+        <div className="space-y-4">
+          {transformedWebsites.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <Activity className="text-gray-400" size={32} />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No websites monitored yet</h3>
+              <p className="text-gray-500 mb-6">
+                Add your first website to start monitoring its uptime and performance.
+              </p>
+              <button
+                onClick={handleAddWebsite}
+                className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md"
+              >
+                <Plus size={20} className="mr-2" />
+                Add Your First Website
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Monitored Websites ({transformedWebsites.length})
+                </h2>
+                <div className="flex items-center space-x-2 text-sm text-gray-500">
+                  <Clock size={16} />
+                  <span>Last updated: {new Date().toLocaleTimeString()}</span>
+                </div>
+              </div>
+              
+              {transformedWebsites.map((website) => (
+                <WebsiteCard
+                  key={website.id}
+                  website={website}
+                  onRemove={handleRemoveWebsite}
+                />
+              ))}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <footer className="mt-16 pt-8 border-t border-gray-200">
+          <div className="text-center text-sm text-gray-500">
+            <p>UpTime Monitor - Keep track of your websites' availability and performance</p>
+            <p className="mt-2">
+              Monitoring {totalSites} website{totalSites !== 1 ? 's' : ''} with real-time updates
+            </p>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }
