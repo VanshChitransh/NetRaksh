@@ -4,7 +4,9 @@
   "type": "module",
   "private": true,
   "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
     "@types/bun": "latest",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.0.6",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
@@ -13,10 +15,14 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@clerk/backend": "^2.3.1",
+    "@clerk/clerk-sdk-node": "^4.13.23",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "db": "*",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2"
   }
 }

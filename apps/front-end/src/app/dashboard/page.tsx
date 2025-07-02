@@ -1,5 +1,6 @@
 "use client"
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { 
   Activity, 
   Plus, 
@@ -15,273 +16,11 @@ import {
   ExternalLink,
   X
 } from 'lucide-react';
+import useWebsites, { TransformedWebsite, UptimeWindow } from '@/hooks/useWebsites';
 
-// Types
-interface UptimeWindow {
-  timestamp: string;
-  status: 'up' | 'down';
-  responseTime: number;
-}
 
-interface Tick {
-  id: string;
-  createdAt: string;
-  status: boolean;
-  latency: number;
-}
-
-interface Website {
-  id: string;
-  url: string;
-  ticks: Tick[];
-}
-
-interface TransformedWebsite {
-  id: string;
-  name: string;
-  url: string;
-  status: 'up' | 'down' | 'degraded';
-  uptime: number;
-  responseTime: number;
-  lastChecked: string;
-  uptimeHistory: UptimeWindow[];
-}
-
-// Custom Hook for Website Management
-const useWebsites = () => {
-  const [websites, setWebsites] = useState<Website[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Generate mock data for demonstration
-  const mockWebsites: Website[] = [];
-
-  function generateMockTicks(isUp: boolean, avgLatency: number): Tick[] {
-    const ticks: Tick[] = [];
-    const now = new Date();
-    
-    // Generate ticks for the last 30 minutes (every 30 seconds)
-    for (let i = 60; i >= 0; i--) {
-      const tickTime = new Date(now.getTime() - i * 30 * 1000);
-      const randomVariation = (Math.random() - 0.5) * 100;
-      const latency = isUp ? Math.max(50, avgLatency + randomVariation) : 0;
-      
-      // Simulate occasional downtime
-      const status = isUp ? (Math.random() > 0.05) : false;
-      
-      ticks.push({
-        id: `tick-${i}`,
-        createdAt: tickTime.toISOString(),
-        status,
-        latency: Math.round(latency)
-      });
-    }
-    
-    return ticks;
-  }
-
-  useEffect(() => {
-    // Simulate loading
-    setTimeout(() => {
-      setWebsites([]);
-      setLoading(false);
-    }, 1000);
-  }, []);
-
-  const refreshWebsites = async () => {
-    setLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Update with fresh mock data
-    const updatedWebsites = websites.map(site => ({
-      ...site,
-      ticks: generateMockTicks(
-        site.ticks.length > 0 ? site.ticks[site.ticks.length - 1].status : true,
-        site.ticks.length > 0 ? site.ticks[site.ticks.length - 1].latency : 200
-      )
-    }));
-    
-    setWebsites(updatedWebsites);
-    setLoading(false);
-  };
-
-  const addWebsite = async (url: string): Promise<boolean> => {
-    try {
-      const newWebsite: Website = {
-        id: Date.now().toString(),
-        url,
-        ticks: generateMockTicks(true, 200 + Math.random() * 300)
-      };
-      
-      setWebsites(prev => [...prev, newWebsite]);
-      return true;
-    } catch (error) {
-      console.error('Failed to add website:', error);
-      return false;
-    }
-  };
-
-  const removeWebsite = async (id: string): Promise<boolean> => {
-    try {
-      setWebsites(prev => prev.filter(site => site.id !== id));
-      return true;
-    } catch (error) {
-      console.error('Failed to remove website:', error);
-      return false;
-    }
-  };
-
-  return {
-    websites,
-    loading,
-    refreshWebsites,
-    addWebsite,
-    removeWebsite
-  };
-};
-
-// Utility Functions
-const extractDomainName = (url: string): string => {
-  try {
-    const domain = new URL(url).hostname;
-    return domain.replace('www.', '');
-  } catch {
-    return url;
-  }
-};
-
-const getRelativeTime = (date: Date): string => {
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
-  if (diffInSeconds < 60) {
-    return `${diffInSeconds} seconds ago`;
-  } else if (diffInSeconds < 3600) {
-    const minutes = Math.floor(diffInSeconds / 60);
-    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-  } else if (diffInSeconds < 86400) {
-    const hours = Math.floor(diffInSeconds / 3600);
-    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-  } else {
-    const days = Math.floor(diffInSeconds / 86400);
-    return `${days} day${days > 1 ? 's' : ''} ago`;
-  }
-};
-
-const aggregateTicksToThreeMinuteWindows = (ticks: Tick[]): UptimeWindow[] => {
-  if (!ticks || ticks.length === 0) {
-    // Return empty windows for the last 30 minutes if no ticks
-    const now = new Date();
-    const windows: UptimeWindow[] = [];
-    
-    for (let i = 9; i >= 0; i--) {
-      const windowEnd = new Date(now.getTime() - i * 3 * 60 * 1000);
-      windows.push({
-        timestamp: windowEnd.toISOString(),
-        status: 'down' as const,
-        responseTime: 0
-      });
-    }
-    
-    return windows;
-  }
-
-  const sortedTicks = [...ticks].sort((a, b) => 
-    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  );
-
-  const now = new Date();
-  const windows: UptimeWindow[] = [];
-  
-  for (let i = 9; i >= 0; i--) {
-    const windowStart = new Date(now.getTime() - (i + 1) * 3 * 60 * 1000);
-    const windowEnd = new Date(now.getTime() - i * 3 * 60 * 1000);
-    
-    const windowTicks = sortedTicks.filter(tick => {
-      const tickTime = new Date(tick.createdAt);
-      return tickTime >= windowStart && tickTime < windowEnd;
-    });
-    
-    let status: 'up' | 'down' = 'down';
-    let avgResponseTime = 0;
-    
-    if (windowTicks.length > 0) {
-      const hasDownTick = windowTicks.some(tick => !tick.status);
-      status = hasDownTick ? 'down' : 'up';
-      
-      const successfulTicks = windowTicks.filter(tick => tick.status);
-      if (successfulTicks.length > 0) {
-        avgResponseTime = Math.round(
-          successfulTicks.reduce((sum, tick) => sum + tick.latency, 0) / successfulTicks.length
-        );
-      }
-    }
-    
-    windows.push({
-      timestamp: windowEnd.toISOString(),
-      status,
-      responseTime: avgResponseTime
-    });
-  }
-  
-  return windows;
-};
-
-const transformWebsiteData = (websites: Website[] = []): TransformedWebsite[] => {
-  return websites.map(site => {
-    const uptimeHistory = aggregateTicksToThreeMinuteWindows(site.ticks);
-    
-    // Calculate uptime for last 24 hours
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentTicks = site.ticks?.filter(tick => 
-      new Date(tick.createdAt) >= oneDayAgo
-    ) || [];
-    
-    const uptime = recentTicks.length > 0 
-      ? Math.round((recentTicks.filter(tick => tick.status).length / recentTicks.length) * 100 * 10) / 10
-      : 0;
-    
-    // Get latest tick for current status
-    const latestTick = site.ticks && site.ticks.length > 0 
-      ? site.ticks.reduce((latest, current) => 
-          new Date(current.createdAt) > new Date(latest.createdAt) ? current : latest
-        )
-      : null;
-    
-    let status: 'up' | 'down' | 'degraded' = 'down';
-    let responseTime = 0;
-    
-    if (latestTick) {
-      if (latestTick.status) {
-        status = latestTick.latency > 1000 ? 'degraded' : 'up';
-        responseTime = latestTick.latency;
-      } else {
-        status = 'down';
-      }
-    }
-    
-    const lastChecked = latestTick 
-      ? getRelativeTime(new Date(latestTick.createdAt))
-      : 'Never';
-    
-    const name = extractDomainName(site.url);
-    
-    return {
-      id: site.id,
-      name,
-      url: site.url,
-      status,
-      uptime,
-      responseTime,
-      lastChecked,
-      uptimeHistory
-    };
-  });
-};
-
-// Components
 interface StatusIndicatorProps {
-  status: 'up' | 'down' | 'degraded';
+  status: 'up' | 'down' | 'degraded' | 'no-data';
   size?: 'sm' | 'md' | 'lg';
 }
 
@@ -295,7 +34,8 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status, size = 'md' }
   const statusClasses = {
     up: 'bg-green-500 shadow-green-200',
     down: 'bg-red-500 shadow-red-200',
-    degraded: 'bg-yellow-500 shadow-yellow-200'
+    degraded: 'bg-yellow-500 shadow-yellow-200',
+    'no-data': 'bg-gray-400 shadow-gray-200'
   };
 
   return (
@@ -312,24 +52,36 @@ interface UptimeChartProps {
 const UptimeChart: React.FC<UptimeChartProps> = ({ data }) => {
   return (
     <div className="flex items-end space-x-1 h-16 bg-gray-50 p-2 rounded-lg">
-      {data.map((point, index) => (
-        <div
-          key={index}
-          className={`flex-1 rounded-sm transition-all duration-500 hover:opacity-80 cursor-pointer ${
-            point.status === 'up' 
-              ? 'bg-gradient-to-t from-green-400 to-green-500 hover:from-green-500 hover:to-green-600' 
-              : 'bg-gradient-to-t from-red-400 to-red-500 hover:from-red-500 hover:to-red-600'
-          }`}
-          style={{ 
-            height: point.status === 'up' 
-              ? `${Math.max(80, Math.min(100, (point.responseTime / 10) + 60))}%`
-              : '20%' 
-          }}
-          title={`${new Date(point.timestamp).toLocaleTimeString()} - ${point.status.toUpperCase()} ${
-            point.responseTime > 0 ? `(${point.responseTime}ms)` : ''
-          }`}
-        />
-      ))}
+      {data.map((point, index) => {
+        let bgClass = '';
+        let height = '';
+        
+        if (point.status === 'up') {
+          bgClass = 'bg-gradient-to-t from-green-400 to-green-500 hover:from-green-500 hover:to-green-600';
+          height = `${Math.max(80, Math.min(100, (point.responseTime / 10) + 60))}%`;
+        } else if (point.status === 'down') {
+          bgClass = 'bg-gradient-to-t from-red-400 to-red-500 hover:from-red-500 hover:to-red-600';
+          height = '20%';
+        } else {
+          bgClass = 'bg-gradient-to-t from-gray-300 to-gray-400 hover:from-gray-400 hover:to-gray-500';
+          height = '10%';
+        }
+        
+        return (
+          <div
+            key={index}
+            className={`flex-1 rounded-sm transition-all duration-500 hover:opacity-80 cursor-pointer ${bgClass}`}
+            style={{ height }}
+            title={
+              point.status === 'no-data' 
+                ? `${new Date(point.timestamp).toLocaleTimeString()} - NO DATA`
+                : `${new Date(point.timestamp).toLocaleTimeString()} - ${point.status.toUpperCase()} ${
+                    point.responseTime > 0 ? `(${point.responseTime}ms)` : ''
+                  }`
+            }
+          />
+        );
+      })}
     </div>
   );
 };
@@ -347,6 +99,7 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({ website, onRemove }) => {
       case 'up': return 'Operational';
       case 'down': return 'Down';
       case 'degraded': return 'Degraded';
+      case 'no-data': return 'No Data';
       default: return 'Unknown';
     }
   };
@@ -356,6 +109,7 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({ website, onRemove }) => {
       case 'up': return 'text-green-600';
       case 'down': return 'text-red-600';
       case 'degraded': return 'text-yellow-600';
+      case 'no-data': return 'text-gray-600';
       default: return 'text-gray-600';
     }
   };
@@ -410,7 +164,9 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({ website, onRemove }) => {
             </div>
             
             <div className="text-right">
-              <div className="text-lg font-bold text-gray-900">{website.uptime}%</div>
+              <div className="text-lg font-bold text-gray-900">
+                {website.status === 'no-data' ? '-' : `${website.uptime}%`}
+              </div>
               <div className="text-xs text-gray-500">Uptime</div>
             </div>
             
@@ -455,6 +211,10 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({ website, onRemove }) => {
                     <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                     <span>Downtime</span>
                   </div>
+                  <div className="flex items-center space-x-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                    <span>No Data</span>
+                  </div>
                 </div>
               </div>
               <UptimeChart data={website.uptimeHistory} />
@@ -464,22 +224,28 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({ website, onRemove }) => {
               <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-3xl font-bold text-green-600">{website.uptime}%</div>
+                    <div className={`text-3xl font-bold ${
+                      website.status === 'no-data' ? 'text-gray-400' : 'text-green-600'
+                    }`}>
+                      {website.status === 'no-data' ? '-' : `${website.uptime}%`}
+                    </div>
                     <div className="text-sm text-gray-500">24-hour uptime</div>
                   </div>
-                  <Zap className="text-green-500" size={28} />
+                  <Zap className={website.status === 'no-data' ? 'text-gray-400' : 'text-green-500'} size={28} />
                 </div>
               </div>
               
               <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-3xl font-bold text-blue-600">
+                    <div className={`text-3xl font-bold ${
+                      website.responseTime > 0 ? 'text-blue-600' : 'text-gray-400'
+                    }`}>
                       {website.responseTime > 0 ? `${website.responseTime}ms` : '-'}
                     </div>
                     <div className="text-sm text-gray-500">Last response time</div>
                   </div>
-                  <Clock className="text-blue-500" size={28} />
+                  <Clock className={website.responseTime > 0 ? 'text-blue-500' : 'text-gray-400'} size={28} />
                 </div>
               </div>
               
@@ -600,18 +366,24 @@ const AddWebsiteForm: React.FC<AddWebsiteFormProps> = ({ onAdd, onCancel }) => {
   );
 };
 
-// Main App Component
-function App() {
-  const { websites, loading, refreshWebsites, addWebsite, removeWebsite } = useWebsites();
+
+export default function Dashboard() {
+  const { 
+    transformedWebsites, 
+    loading, 
+    refreshWebsites, 
+    addWebsite, 
+    removeWebsite 
+  } = useWebsites();
+  
   const [showAddForm, setShowAddForm] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  
-  const transformedWebsites = transformWebsiteData(websites);
   
   const totalSites = transformedWebsites.length;
   const upSites = transformedWebsites.filter(site => site.status === 'up').length;
   const downSites = transformedWebsites.filter(site => site.status === 'down').length;
   const degradedSites = transformedWebsites.filter(site => site.status === 'degraded').length;
+  const noDataSites = transformedWebsites.filter(site => site.status === 'no-data').length;
 
   const handleAddWebsite = () => {
     setShowAddForm(true);
@@ -647,7 +419,8 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
+
+
       <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -656,8 +429,8 @@ function App() {
                 <Activity className="text-white" size={24} />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">UpTime Monitor</h1>
-                <p className="text-sm text-gray-500">Real-time website monitoring</p>
+                <h1 className="text-2xl font-bold text-gray-900">DePIN UpTime Monitor</h1>
+                <p className="text-sm text-gray-500">Decentralized website monitoring</p>
               </div>
             </div>
             
@@ -688,10 +461,9 @@ function App() {
         </div>
       </header>
 
-      {/* Main Content */}
+  
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
@@ -720,7 +492,7 @@ function App() {
                 <div className="text-3xl font-bold text-red-600">{downSites}</div>
                 <div className="text-sm text-gray-500">Down</div>
               </div>
-              <div className="w-6 h-6 bg-red-500 rounded-full  shadow-red-200 shadow-lg"></div>
+              <div className="w-6 h-6 bg-red-500 rounded-full shadow-red-200 shadow-lg"></div>
             </div>
           </div>
           
@@ -733,70 +505,52 @@ function App() {
               <div className="w-6 h-6 bg-yellow-500 rounded-full shadow-yellow-200 shadow-lg"></div>
             </div>
           </div>
-        </div>
-
-        {/* Add Website Form */}
-        {showAddForm && (
-          <AddWebsiteForm
-            onAdd={handleAddSubmit}
-            onCancel={() => setShowAddForm(false)}
-          />
-        )}
-
-        {/* Websites List */}
-        <div className="space-y-4">
-          {transformedWebsites.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <Activity className="text-gray-400" size={32} />
+          
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-gray-600">{noDataSites}</div>
+                <div className="text-sm text-gray-500">No Data</div>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No websites monitored yet</h3>
-              <p className="text-gray-500 mb-6">
-                Add your first website to start monitoring its uptime and performance.
-              </p>
-              <button
-                onClick={handleAddWebsite}
-                className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md"
-              >
-                <Plus size={20} className="mr-2" />
-                Add Your First Website
-              </button>
+              <div className="w-6 h-6 bg-gray-400 rounded-full shadow-gray-200 shadow-lg"></div>
             </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  Monitored Websites ({transformedWebsites.length})
-                </h2>
-                <div className="flex items-center space-x-2 text-sm text-gray-500">
-                  <Clock size={16} />
-                  <span>Last updated: {new Date().toLocaleTimeString()}</span>
-                </div>
-              </div>
-              
-              {transformedWebsites.map((website) => (
-                <WebsiteCard
-                  key={website.id}
-                  website={website}
-                  onRemove={handleRemoveWebsite}
-                />
-              ))}
-            </>
-          )}
+          </div>
         </div>
 
-        {/* Footer */}
-        <footer className="mt-16 pt-8 border-t border-gray-200">
-          <div className="text-center text-sm text-gray-500">
-            <p>UpTime Monitor - Keep track of your websites' availability and performance</p>
-            <p className="mt-2">
-              Monitoring {totalSites} website{totalSites !== 1 ? 's' : ''} with real-time updates
-            </p>
-          </div>
-        </footer>
-      </div>
-    </div>
-  );
-}
+        {showAddForm && (
+         <AddWebsiteForm
+           onAdd={handleAddSubmit}
+           onCancel={() => setShowAddForm(false)}
+         />
+       )}
 
-export default App;
+       <div className="space-y-6">
+         {transformedWebsites.length === 0 ? (
+           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+               <Activity className="text-gray-400" size={32} />
+             </div>
+             <h3 className="text-lg font-medium text-gray-900 mb-2">No websites being monitored</h3>
+             <p className="text-gray-500 mb-6">Add your first website to start monitoring its uptime and performance.</p>
+             <button 
+               onClick={handleAddWebsite}
+               className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+             >
+               <Plus size={16} className="mr-2" />
+               Add Your First Website
+             </button>
+           </div>
+         ) : (
+           transformedWebsites.map((website) => (
+             <WebsiteCard
+               key={website.id}
+               website={website}
+               onRemove={handleRemoveWebsite}
+             />
+           ))
+         )}
+       </div>
+     </div>
+   </div>
+ );
+}

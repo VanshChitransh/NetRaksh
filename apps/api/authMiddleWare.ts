@@ -1,8 +1,61 @@
-import type { Request, Response, NextFunction } from "express";
-const authMiddleWare = (req: Request, res: Response, next: NextFunction) => {
-    const authHeader = req.headers['authorization']
-    req.userId = "1";
-    next();
+import type { Request, Response, NextFunction } from 'express';
+import { ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
+import { prismaClient } from 'db/client';
+
+
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+      auth?: any; 
+    }
+  }
 }
 
-export {authMiddleWare}
+
+export const authMiddleWare = async (req: Request, res: Response, next: NextFunction) => {
+
+  ClerkExpressRequireAuth()(req as any, res as any, async (error?: any) => {
+    if (error) {
+      res.status(401).json({ error: 'Authentication failed' });
+      return;
+    }
+    
+    try {
+    
+      const clerkUserId = req.auth?.userId;
+      
+      if (!clerkUserId) {
+        res.status(401).json({ error: 'User ID not found' });
+        return;
+      }
+      
+      
+      let user = await prismaClient.user.findUnique({
+        where: { clerkId: clerkUserId }
+      });
+      
+      if (!user) {
+        
+        const email = req.auth?.sessionClaims?.email || `${clerkUserId}@clerk.user`;
+        
+        user = await prismaClient.user.create({
+          data: {
+            clerkId: clerkUserId,
+            email: email
+          }
+        });
+      }
+      
+      
+      req.userId = user.id;
+      
+      next();
+      
+    } catch (dbError) {
+      console.error('Database error in auth middleware:', dbError);
+      res.status(500).json({ error: 'Internal server error' });
+      return;
+    }
+  });
+};
