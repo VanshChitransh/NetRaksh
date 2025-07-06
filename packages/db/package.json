@@ -2,12 +2,13 @@
   "name": "db",
   "module": "index.ts",
   "type": "module",
-  "exports":{
+  "exports": {
     "./client": "./src/index.ts"
   },
   "private": true,
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "tsx": "^4.7.0"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -15,5 +16,13 @@
   "dependencies": {
     "@prisma/client": "^6.10.1",
     "prisma": "^6.10.1"
+  },
+  "prisma": {
+    "seed": "bun run prisma/seed.ts"
+  },
+  "scripts": {
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma migrate reset",
+    "db:clear": "tsx prisma/clear-data.ts"
   }
 }

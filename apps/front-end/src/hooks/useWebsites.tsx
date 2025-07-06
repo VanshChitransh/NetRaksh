@@ -24,7 +24,7 @@ interface Website {
 
 interface UptimeWindow {
     timestamp: string;
-    status: 'up' | 'down' | 'no-data';
+    status: 'Good' | 'Bad' | 'no-data';
     responseTime: number;
 }
 
@@ -32,7 +32,7 @@ interface TransformedWebsite {
     id: string;
     name: string;
     url: string;
-    status: 'up' | 'down' | 'degraded' | 'no-data';
+    status: 'Good' | 'Bad' | 'degraded' | 'no-data';
     uptime: number;
     responseTime: number;
     lastChecked: string;
@@ -113,7 +113,7 @@ const aggregateTicksToThreeMinuteWindows = (ticks: Tick[]): UptimeWindow[] => {
         
         
         const hasDownTick = windowTicks.some(tick => tick.status === 'Bad');
-        const status: 'up' | 'down' = hasDownTick ? 'down' : 'up';
+        const status: 'Good' | 'Bad' = hasDownTick ? 'Bad' : 'Good';
         
         const successfulTicks = windowTicks.filter(tick => tick.status === 'Good');
         const avgResponseTime = successfulTicks.length > 0
@@ -162,14 +162,14 @@ const transformWebsiteData = (websites: Website[] = []): TransformedWebsite[] =>
             new Date(current.timeStamps) > new Date(latest.timeStamps) ? current : latest
         );
         
-        let status: 'up' | 'down' | 'degraded' = 'down';
+        let status: 'Good' | 'Bad' | 'degraded' = 'Bad';
         let responseTime = 0;
         
         if (latestTick.status === 'Good') {
-            status = latestTick.latency > 1000 ? 'degraded' : 'up';
+            status = latestTick.latency > 1000 ? 'degraded' : 'Good';
             responseTime = latestTick.latency;
         } else {
-            status = 'down';
+            status = 'Bad';
         }
         
         const lastChecked = getRelativeTime(new Date(latestTick.timeStamps));
@@ -198,6 +198,7 @@ const useWebsites = (): UseWebsitesReturn => {
         if (!isLoaded || !isSignedIn) {
             setWebsites([]);
             setLoading(false);
+            console.log("User not authenticated");
             return;
         }
 
@@ -209,7 +210,7 @@ const useWebsites = (): UseWebsitesReturn => {
                 setLoading(false);
                 return;
             }
-            
+            console.log("Hey this is token -> ", token);
             const response = await axios.get(`${API_BACKEND_URL}/api/v1/websites`, {
                 headers: {
                     Authorization: `Bearer ${token}`,

@@ -20,7 +20,7 @@ import useWebsites, { TransformedWebsite, UptimeWindow } from '@/hooks/useWebsit
 
 
 interface StatusIndicatorProps {
-  status: 'up' | 'down' | 'degraded' | 'no-data';
+  status: 'Good' | 'Bad' | 'degraded' | 'no-data';
   size?: 'sm' | 'md' | 'lg';
 }
 
@@ -32,8 +32,8 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status, size = 'md' }
   };
 
   const statusClasses = {
-    up: 'bg-green-500 shadow-green-200',
-    down: 'bg-red-500 shadow-red-200',
+   Good: 'bg-green-500 shadow-green-200',
+    Bad: 'bg-red-500 shadow-red-200',
     degraded: 'bg-yellow-500 shadow-yellow-200',
     'no-data': 'bg-gray-400 shadow-gray-200'
   };
@@ -56,10 +56,10 @@ const UptimeChart: React.FC<UptimeChartProps> = ({ data }) => {
         let bgClass = '';
         let height = '';
         
-        if (point.status === 'up') {
+        if (point.status === 'Good') {
           bgClass = 'bg-gradient-to-t from-green-400 to-green-500 hover:from-green-500 hover:to-green-600';
           height = `${Math.max(80, Math.min(100, (point.responseTime / 10) + 60))}%`;
-        } else if (point.status === 'down') {
+        } else if (point.status === 'Bad') {
           bgClass = 'bg-gradient-to-t from-red-400 to-red-500 hover:from-red-500 hover:to-red-600';
           height = '20%';
         } else {
@@ -96,8 +96,8 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({ website, onRemove }) => {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'up': return 'Operational';
-      case 'down': return 'Down';
+      case 'Good': return 'Operational';
+      case 'Bad': return 'Bad';
       case 'degraded': return 'Degraded';
       case 'no-data': return 'No Data';
       default: return 'Unknown';
@@ -106,8 +106,8 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({ website, onRemove }) => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'up': return 'text-green-600';
-      case 'down': return 'text-red-600';
+      case 'Good': return 'text-green-600';
+      case 'Bad': return 'text-red-600';
       case 'degraded': return 'text-yellow-600';
       case 'no-data': return 'text-gray-600';
       default: return 'text-gray-600';
@@ -312,7 +312,7 @@ const AddWebsiteForm: React.FC<AddWebsiteFormProps> = ({ onAdd, onCancel }) => {
         setError('Failed to add website. Please try again.');
       }
     } catch (error) {
-      setError('An error occurred while adding the website.');
+      setError(`An error occurred while adding the website. + ${error}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -380,8 +380,8 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   
   const totalSites = transformedWebsites.length;
-  const upSites = transformedWebsites.filter(site => site.status === 'up').length;
-  const downSites = transformedWebsites.filter(site => site.status === 'down').length;
+  const upSites = transformedWebsites.filter(site => site.status === 'Good').length;
+  const downSites = transformedWebsites.filter(site => site.status === 'Bad').length;
   const degradedSites = transformedWebsites.filter(site => site.status === 'degraded').length;
   const noDataSites = transformedWebsites.filter(site => site.status === 'no-data').length;
 

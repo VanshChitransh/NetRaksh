@@ -59,3 +59,24 @@ export const authMiddleWare = async (req: Request, res: Response, next: NextFunc
     }
   });
 };
+
+
+// import type{ NextFunction, Request, Response } from "express";
+// import jwt from 'jsonwebtoken'
+// import { JWT_PUBLIC_KEY } from "./config";
+// const authMiddleWare = async(req: Request, res: Response, next: NextFunction) => {
+//   const token = `Bearer + ${req.headers['authorization']}`;
+//   if(!token){
+//     return res.status(404).json({msg: "Unauthorized"});
+//   }
+
+//   const decode = jwt.verify(token, JWT_PUBLIC_KEY);
+//   if(!decode || !decode.sub){
+//     return res.status(404).json({msg: "Unauthorized"});
+//   }
+
+//   req.userId = decode.sub as string; 
+//   next();
+// }
+
+// export { authMiddleWare };

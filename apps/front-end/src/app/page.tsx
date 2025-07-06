@@ -8,20 +8,17 @@ import {
   BarChart3, 
   Globe, 
   Zap, 
-  Clock, 
   CheckCircle2, 
   ArrowRight,
-  Menu,
-  X,
-  Star,
-  Users,
   Activity,
   Smartphone
 } from 'lucide-react';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const router = useRouter();
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
 
@@ -50,11 +47,11 @@ function App() {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <button className="bg-emerald-600 hover:bg-emerald-700 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 hover:scale-105 flex items-center group">
+              <button className="bg-emerald-600 hover:bg-emerald-700 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 hover:scale-105 flex items-center group cursor-pointer">
                 Start Free Trial
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </button>
-              <button className="border border-gray-600 hover:border-gray-500 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-gray-900/50">
+              <button onClick={() => router.push('/dashboard')} className="border border-gray-600 hover:border-gray-500 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-gray-900/50 hover:scale-105 cursor-pointer">
                 View Demo
               </button>
             </div>
@@ -100,7 +97,7 @@ function App() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-emerald-400/50 transition-all duration-300 hover:transform hover:scale-105">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-emerald-400/50 transition-all duration-300 hover:transform hover:scale-105 cursor-pointer">
               <div className="bg-emerald-600/20 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
                 <Globe className="h-6 w-6 text-emerald-400" />
               </div>
@@ -108,7 +105,7 @@ function App() {
               <p className="text-gray-400">Monitor your websites from multiple global locations with customizable check intervals.</p>
             </div>
 
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-blue-400/50 transition-all duration-300 hover:transform hover:scale-105">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-blue-400/50 transition-all duration-300 hover:transform hover:scale-105 cursor-pointer">
               <div className="bg-blue-600/20 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
                 <Activity className="h-6 w-6 text-blue-400" />
               </div>
@@ -116,7 +113,7 @@ function App() {
               <p className="text-gray-400">Test your APIs with custom headers, authentication, and response validation.</p>
             </div>
 
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-purple-400/50 transition-all duration-300 hover:transform hover:scale-105">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-purple-400/50 transition-all duration-300 hover:transform hover:scale-105 cursor-pointer">
               <div className="bg-purple-600/20 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
                 <Bell className="h-6 w-6 text-purple-400" />
               </div>
@@ -124,7 +121,7 @@ function App() {
               <p className="text-gray-400">Get notified instantly via email, SMS, Slack, or webhook when issues arise.</p>
             </div>
 
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-orange-400/50 transition-all duration-300 hover:transform hover:scale-105">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-orange-400/50 transition-all duration-300 hover:transform hover:scale-105 cursor-pointer">
               <div className="bg-orange-600/20 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
                 <BarChart3 className="h-6 w-6 text-orange-400" />
               </div>
@@ -132,7 +129,7 @@ function App() {
               <p className="text-gray-400">Comprehensive reports with uptime statistics, response times, and performance trends.</p>
             </div>
 
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-red-400/50 transition-all duration-300 hover:transform hover:scale-105">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-red-400/50 transition-all duration-300 hover:transform hover:scale-105 cursor-pointer">
               <div className="bg-red-600/20 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
                 <Shield className="h-6 w-6 text-red-400" />
               </div>
@@ -140,7 +137,7 @@ function App() {
               <p className="text-gray-400">Track SSL certificate expiration dates and get alerts before they expire.</p>
             </div>
 
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-yellow-400/50 transition-all duration-300 hover:transform hover:scale-105">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:border-yellow-400/50 transition-all duration-300 hover:transform hover:scale-105 cursor-pointer">
               <div className="bg-yellow-600/20 w-12 h-12 rounded-lg flex items-center justify-center mb-6">
                 <Smartphone className="h-6 w-6 text-yellow-400" />
               </div>
@@ -204,7 +201,7 @@ function App() {
 
           <div className="grid md:grid-cols-3 gap-8">
             {/* Starter Plan */}
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 hover:scale-105 transition-all duration-300">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold mb-2">Starter</h3>
                 <div className="text-4xl font-bold mb-2">$9<span className="text-lg text-gray-400">/month</span></div>
@@ -228,13 +225,13 @@ function App() {
                   <span>Basic reporting</span>
                 </li>
               </ul>
-              <button className="w-full border border-gray-600 hover:border-emerald-400 py-3 rounded-lg font-semibold transition-colors">
+              <button className="w-full border border-gray-600 hover:border-emerald-400 py-3 rounded-lg font-semibold transition-colors cursor-pointer">
                 Start Free Trial
               </button>
             </div>
 
             {/* Professional Plan */}
-            <div className="bg-gray-900/50 border-2 border-emerald-400 rounded-xl p-8 relative">
+            <div className="bg-gray-900/50 border-2 border-emerald-400 rounded-xl p-8 relative duration-300 transition-all hover:scale-105">
               <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
                 <span className="bg-emerald-400 text-black px-4 py-1 rounded-full text-sm font-semibold">
                   Most Popular
@@ -267,13 +264,13 @@ function App() {
                   <span>API access</span>
                 </li>
               </ul>
-              <button className="w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-lg font-semibold transition-colors">
+              <button className="w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-lg font-semibold transition-colors cursor-pointer">
                 Start Free Trial
               </button>
             </div>
 
             {/* Enterprise Plan */}
-            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8">
+            <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 transform-all duration-300 hover:scale-105">
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold mb-2">Enterprise</h3>
                 <div className="text-4xl font-bold mb-2">$99<span className="text-lg text-gray-400">/month</span></div>
@@ -318,7 +315,7 @@ function App() {
           <p className="text-xl text-gray-300 mb-8">
             Join thousands of businesses that trust UpGuard to keep their services running smoothly.
           </p>
-          <button className="bg-emerald-600 hover:bg-emerald-700 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 hover:scale-105">
+          <button className="bg-emerald-600 hover:bg-emerald-700 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 hover:scale-105 cursor-pointer">
             Start Your Free 14-Day Trial
           </button>
           <p className="text-sm text-gray-400 mt-4">No credit card required • Cancel anytime</p>
