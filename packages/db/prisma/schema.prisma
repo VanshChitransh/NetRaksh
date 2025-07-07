@@ -42,6 +42,7 @@ model Validator {
   publicKey String         @unique
   location  String
   ip        String         @unique
+  pendingPayouts Int       @default(0)
   ticks     websiteTicks[]
   
   @@map("validators")
